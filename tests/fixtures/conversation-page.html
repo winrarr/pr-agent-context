@@ -1,0 +1,60 @@
+<!doctype html>
+<html>
+  <body>
+    <h1>Make the exporter reliable <span>#42</span></h1>
+    <script type="application/json" data-target="react-app.embeddedData">
+      {
+        "payload": {
+          "pullRequest": {
+            "number": 42,
+            "title": "Make the exporter reliable",
+            "author": { "login": "octocat" },
+            "baseBranch": "main",
+            "headBranch": "fix/paths",
+            "headSha": "abcde12345"
+          }
+        }
+      }
+    </script>
+    <turbo-frame id="review-thread-or-comment-id-9001">
+      <review-thread-collapsible
+        class="review-thread-component"
+        data-resolved="false"
+      >
+        <div>
+          <a href="/octocat/example/pull/42/files/abcde#diff-abc123"
+            >…/review-target.ts</a
+          >
+          <span>Comment on lines +12 to +14</span>
+        </div>
+        <div id="discussion_r101" class="review-comment js-comment">
+          <a class="author">reviewer-one</a>
+          <a
+            id="discussion_r101-permalink"
+            href="https://github.com/octocat/example/pull/42#discussion_r101"
+          ></a>
+          <relative-time datetime="2026-07-20T12:00:00Z"></relative-time>
+          <clipboard-copy
+            value="Please keep the complete path."
+          ></clipboard-copy>
+          <div class="js-comment-body">Rendered body</div>
+        </div>
+      </review-thread-collapsible>
+    </turbo-frame>
+    <turbo-frame id="review-thread-or-comment-id-9002">
+      <review-thread-collapsible
+        class="review-thread-component"
+        data-resolved="true"
+        data-deferred-content-url="/octocat/example/pull/42/threads/9002"
+      >
+        <div>
+          <a href="/octocat/example/pull/42/files/abcde#diff-def456"
+            >…/complete-path.ts</a
+          >
+          <span>Comment on line +8</span>
+          <span title="Label: Outdated">Outdated</span>
+        </div>
+      </review-thread-collapsible>
+    </turbo-frame>
+  </body>
+</html>
