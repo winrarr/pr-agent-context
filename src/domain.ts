@@ -31,14 +31,31 @@ export interface ReviewThread {
   comments: ReviewComment[];
 }
 
+export type PullRequestReviewState =
+  "approved" | "changes_requested" | "commented";
+
+export interface PullRequestReview {
+  id: string;
+  author: string;
+  body: string;
+  state: PullRequestReviewState;
+  submittedAt?: string;
+  url?: string;
+}
+
 export interface PullRequestContext {
   pullRequest: PullRequestMetadata;
-  threads: ReviewThread[];
+  reviews?: PullRequestReview[];
+  threads?: ReviewThread[];
   diff?: string;
   exportedAt: string;
 }
 
 export interface ExportOptions {
+  includeReviewSummaries: boolean;
+  includeReviewThreads: boolean;
   includeResolved: boolean;
+  includeAllReviews: boolean;
+  includeCopilotReviews: boolean;
   includeDiff: boolean;
 }

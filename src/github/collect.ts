@@ -6,6 +6,10 @@ import type {
 import { parseHtml } from "../shared/dom";
 import { buildFilePathMap } from "./file-path-map";
 import { parsePullRequestMetadata } from "./metadata";
+import {
+  filterReviewSummaries,
+  parseReviewSummaries,
+} from "./review-summaries";
 import { findReviewThreadElements, parseReviewThread } from "./review-threads";
 
 export interface CollectionDependencies {
@@ -39,14 +43,24 @@ export async function collectPullRequestContext(
   options: ExportOptions,
   dependencies: CollectionDependencies,
 ): Promise<PullRequestContext> {
-  const [conversation, filesHtml] = await Promise.all([
+  const [conversation, filesHtml, diff] = await Promise.all([
     loadConversation(reference, dependencies),
-    fetchText(dependencies.fetch, `${reference.basePath}/files`),
+    options.includeReviewThreads
+      ? fetchText(dependencies.fetch, `${reference.basePath}/files`)
+      : Promise.resolve(undefined),
+    options.includeDiff
+      ? fetchText(dependencies.fetch, `${reference.basePath}.diff`)
+      : Promise.resolve(undefined),
   ]);
-  const paths = buildFilePathMap(parseHtml(filesHtml));
-  const threadElements = findReviewThreadElements(conversation).filter(
-    (element) => options.includeResolved || element.dataset.resolved !== "true",
-  );
+  const paths = filesHtml
+    ? buildFilePathMap(parseHtml(filesHtml))
+    : new Map<string, string>();
+  const threadElements = options.includeReviewThreads
+    ? findReviewThreadElements(conversation).filter(
+        (element) =>
+          options.includeResolved || element.dataset.resolved !== "true",
+      )
+    : [];
   const threads = await Promise.all(
     threadElements.map(async (element, index) => {
       const initialThread = parseReviewThread(element, paths, index);
@@ -62,13 +76,17 @@ export async function collectPullRequestContext(
     }),
   );
 
-  const diff = options.includeDiff
-    ? await fetchText(dependencies.fetch, `${reference.basePath}.diff`)
-    : undefined;
-
   return {
     pullRequest: parsePullRequestMetadata(conversation, reference),
-    threads,
+    ...(options.includeReviewSummaries
+      ? {
+          reviews: filterReviewSummaries(
+            parseReviewSummaries(conversation, reference.url),
+            options,
+          ),
+        }
+      : {}),
+    ...(options.includeReviewThreads ? { threads } : {}),
     ...(diff ? { diff } : {}),
     exportedAt: new Date().toISOString(),
   };

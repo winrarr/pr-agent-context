@@ -89,6 +89,8 @@ const styles = String.raw`
   }
 
   input { height: 18px; margin: 1px 0 0; width: 18px; }
+  label.dependent { padding-left: 28px; }
+  label:has(input:disabled) { cursor: default; opacity: .6; }
   .option-copy { display: grid; gap: 2px; }
   .option-copy small { color: var(--pac-muted); }
 
@@ -133,6 +135,7 @@ const styles = String.raw`
 `;
 
 export interface ExportResult {
+  reviewCount: number;
   threadCount: number;
 }
 
@@ -155,10 +158,38 @@ export function mountExporter(onExport: ExportHandler): void {
     <dialog aria-labelledby="pac-title">
       <form method="dialog">
         <h2 id="pac-title">Copy PR context</h2>
-        <p>Collect review threads from GitHub using this browser session. Nothing is sent elsewhere.</p>
+        <p>Collect review summaries and threads from GitHub using this browser session. Nothing is sent elsewhere.</p>
         <fieldset>
           <legend>Include</legend>
           <label>
+            <input name="review-summaries" type="checkbox" checked>
+            <span class="option-copy">
+              <span>Review summaries</span>
+              <small>Human change requests are included by default.</small>
+            </span>
+          </label>
+          <label class="dependent">
+            <input name="all-reviews" type="checkbox">
+            <span class="option-copy">
+              <span>All human review summaries</span>
+              <small>Also include approvals and general review comments.</small>
+            </span>
+          </label>
+          <label class="dependent">
+            <input name="copilot-reviews" type="checkbox">
+            <span class="option-copy">
+              <span>Copilot review summaries</span>
+              <small>These can add a substantial amount of generated text.</small>
+            </span>
+          </label>
+          <label>
+            <input name="review-threads" type="checkbox" checked>
+            <span class="option-copy">
+              <span>Review threads</span>
+              <small>Include unresolved file-level discussions.</small>
+            </span>
+          </label>
+          <label class="dependent">
             <input name="resolved" type="checkbox">
             <span class="option-copy">
               <span>Resolved review threads</span>
@@ -188,6 +219,18 @@ export function mountExporter(onExport: ExportHandler): void {
   const cancel = shadow.querySelector<HTMLButtonElement>(".cancel");
   const exportButton = shadow.querySelector<HTMLButtonElement>(".export");
   const status = shadow.querySelector<HTMLElement>(".status");
+  const reviewSummaries = shadow.querySelector<HTMLInputElement>(
+    "input[name='review-summaries']",
+  );
+  const allReviews = shadow.querySelector<HTMLInputElement>(
+    "input[name='all-reviews']",
+  );
+  const copilotReviews = shadow.querySelector<HTMLInputElement>(
+    "input[name='copilot-reviews']",
+  );
+  const reviewThreads = shadow.querySelector<HTMLInputElement>(
+    "input[name='review-threads']",
+  );
   const resolved = shadow.querySelector<HTMLInputElement>(
     "input[name='resolved']",
   );
@@ -199,11 +242,24 @@ export function mountExporter(onExport: ExportHandler): void {
     !cancel ||
     !exportButton ||
     !status ||
+    !reviewSummaries ||
+    !allReviews ||
+    !copilotReviews ||
+    !reviewThreads ||
     !resolved ||
     !diff
   ) {
     throw new Error("Could not initialize the export interface");
   }
+
+  const syncDependencies = () => {
+    allReviews.disabled = !reviewSummaries.checked;
+    copilotReviews.disabled = !reviewSummaries.checked;
+    resolved.disabled = !reviewThreads.checked;
+  };
+  reviewSummaries.addEventListener("change", syncDependencies);
+  reviewThreads.addEventListener("change", syncDependencies);
+  syncDependencies();
 
   trigger.addEventListener("click", () => {
     status.textContent = "";
@@ -217,16 +273,32 @@ export function mountExporter(onExport: ExportHandler): void {
     event.preventDefault();
     exportButton.disabled = true;
     exportButton.textContent = "Collecting…";
-    status.textContent = "Reading review threads and resolving file paths…";
+    status.textContent = "Reading reviews and resolving file paths…";
     status.removeAttribute("data-state");
 
     try {
       const result = await onExport({
+        includeReviewSummaries: reviewSummaries.checked,
+        includeReviewThreads: reviewThreads.checked,
+        includeAllReviews: allReviews.checked,
+        includeCopilotReviews: copilotReviews.checked,
         includeResolved: resolved.checked,
         includeDiff: diff.checked,
       });
       status.dataset.state = "success";
-      status.textContent = `Copied ${result.threadCount} review ${result.threadCount === 1 ? "thread" : "threads"}.`;
+      const sections = [];
+      if (reviewSummaries.checked)
+        sections.push(
+          `${result.reviewCount} review ${result.reviewCount === 1 ? "summary" : "summaries"}`,
+        );
+      if (reviewThreads.checked)
+        sections.push(
+          `${result.threadCount} review ${result.threadCount === 1 ? "thread" : "threads"}`,
+        );
+      status.textContent =
+        sections.length > 0
+          ? `Copied PR information and ${sections.join(" and ")}.`
+          : "Copied PR information.";
       exportButton.textContent = "Copied";
       window.setTimeout(() => dialog.close(), 900);
     } catch (error) {

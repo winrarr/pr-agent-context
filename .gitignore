@@ -1,5 +1,11 @@
 node_modules/
 dist/
+artifacts/
 coverage/
+.env
+.env.*
+*.pem
+google-credentials*.json
+service-account*.json
 *.log
 .DS_Store

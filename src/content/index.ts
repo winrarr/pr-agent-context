@@ -23,7 +23,10 @@ function initialize(): void {
       currentUrl: new URL(window.location.href),
     });
     await navigator.clipboard.writeText(renderAgentMarkdown(context));
-    return { threadCount: context.threads.length };
+    return {
+      reviewCount: context.reviews?.length ?? 0,
+      threadCount: context.threads?.length ?? 0,
+    };
   });
 }
 

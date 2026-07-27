@@ -1,5 +1,6 @@
 import type {
   PullRequestContext,
+  PullRequestReview,
   ReviewComment,
   ReviewThread,
 } from "../domain";
@@ -35,6 +36,22 @@ function threadMarkdown(thread: ReviewThread, index: number): string {
   ].join("\n");
 }
 
+function reviewMarkdown(review: PullRequestReview): string {
+  const states = {
+    approved: "approved",
+    changes_requested: "changes requested",
+    commented: "commented",
+  } as const;
+  const metadata = [
+    `@${review.author}`,
+    states[review.state],
+    review.submittedAt ? new Date(review.submittedAt).toISOString() : null,
+    review.url ?? null,
+  ].filter(Boolean);
+
+  return [`### ${metadata.join(" · ")}`, "", review.body.trim()].join("\n");
+}
+
 export function renderAgentMarkdown(context: PullRequestContext): string {
   const { pullRequest } = context;
   const branches =
@@ -51,21 +68,29 @@ export function renderAgentMarkdown(context: PullRequestContext): string {
     .filter(Boolean)
     .join("\n");
   const threads =
-    context.threads.length > 0
+    context.threads && context.threads.length > 0
       ? context.threads.map(threadMarkdown).join("\n\n---\n\n")
       : "No matching review threads were found.";
-  const diff = context.diff
-    ? `\n\n## Pull request diff\n\n\`\`\`diff\n${context.diff.trim()}\n\`\`\``
-    : "";
+  const reviews =
+    context.reviews && context.reviews.length > 0
+      ? context.reviews.map(reviewMarkdown).join("\n\n---\n\n")
+      : "No review summaries with comments were found.";
+  const sections = [
+    [`# ${pullRequest.title}`, "", metadata].join("\n"),
+    context.reviews
+      ? [`## Review summaries (${context.reviews.length})`, "", reviews].join(
+          "\n",
+        )
+      : null,
+    context.threads
+      ? [`## Review threads (${context.threads.length})`, "", threads].join(
+          "\n",
+        )
+      : null,
+    context.diff
+      ? `## Pull request diff\n\n\`\`\`diff\n${context.diff.trim()}\n\`\`\``
+      : null,
+  ].filter((section): section is string => section !== null);
 
-  return [
-    `# ${pullRequest.title}`,
-    "",
-    metadata,
-    "",
-    `## Review threads (${context.threads.length})`,
-    "",
-    threads,
-    diff,
-  ].join("\n");
+  return sections.join("\n\n");
 }

@@ -21,7 +21,14 @@ describe("collectPullRequestContext", () => {
 
     const context = await collectPullRequestContext(
       reference,
-      { includeResolved: true, includeDiff: true },
+      {
+        includeReviewSummaries: true,
+        includeReviewThreads: true,
+        includeResolved: true,
+        includeAllReviews: false,
+        includeCopilotReviews: false,
+        includeDiff: true,
+      },
       {
         fetch: fetcher as typeof fetch,
         currentDocument: document,
@@ -35,7 +42,14 @@ describe("collectPullRequestContext", () => {
       headSha: "abcde12345",
     });
     expect(context.threads).toHaveLength(2);
-    expect(context.threads[1]?.comments[0]?.body).toBe(
+    expect(context.reviews).toEqual([
+      expect.objectContaining({
+        id: "303",
+        state: "changes_requested",
+        body: "Please address the failing edge case before merging.",
+      }),
+    ]);
+    expect(context.threads?.[1]?.comments[0]?.body).toBe(
       "The deferred comment body.",
     );
     expect(context.diff).toContain("diff --git");
@@ -59,7 +73,14 @@ describe("collectPullRequestContext", () => {
 
     const context = await collectPullRequestContext(
       reference,
-      { includeResolved: false, includeDiff: false },
+      {
+        includeReviewSummaries: true,
+        includeReviewThreads: true,
+        includeResolved: false,
+        includeAllReviews: false,
+        includeCopilotReviews: false,
+        includeDiff: false,
+      },
       {
         fetch: fetcher as typeof fetch,
         currentDocument: document,
@@ -69,5 +90,37 @@ describe("collectPullRequestContext", () => {
 
     expect(context.threads).toHaveLength(1);
     expect(fetcher).toHaveBeenCalledTimes(2);
+  });
+
+  it("collects only PR metadata without requesting files when review sections are disabled", async () => {
+    const fetcher = vi.fn(async (input: RequestInfo | URL) => {
+      const path = new URL(String(input), url.origin).pathname;
+      const body =
+        path === reference.basePath ? fixture("conversation-page.html") : null;
+      return new Response(body ?? "unexpected", { status: body ? 200 : 500 });
+    });
+
+    const context = await collectPullRequestContext(
+      reference,
+      {
+        includeReviewSummaries: false,
+        includeReviewThreads: false,
+        includeResolved: false,
+        includeAllReviews: false,
+        includeCopilotReviews: false,
+        includeDiff: false,
+      },
+      {
+        fetch: fetcher as typeof fetch,
+        currentDocument: document,
+        currentUrl: url,
+      },
+    );
+
+    expect(context.pullRequest.title).toBe("Make the exporter reliable");
+    expect(context.reviews).toBeUndefined();
+    expect(context.threads).toBeUndefined();
+    expect(context.diff).toBeUndefined();
+    expect(fetcher).toHaveBeenCalledTimes(1);
   });
 });
