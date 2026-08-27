@@ -1,4 +1,4 @@
-import type { ExportOptions } from "../domain";
+import type { ContextCounts, ExportOptions } from "../domain";
 
 const HOST_ID = "pr-agent-context-root";
 
@@ -98,7 +98,65 @@ const styles = String.raw`
     color: var(--pac-muted);
     min-height: 21px;
     padding-top: 8px;
+    white-space: pre-line;
   }
+
+  .counts {
+    border-top: 1px solid var(--pac-border);
+    color: var(--pac-muted);
+    margin-top: 16px;
+    padding-top: 12px;
+  }
+
+  .counts[data-state="error"] { color: #cf222e; }
+
+  .counts-heading {
+    color: var(--pac-fg);
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: .02em;
+    margin-bottom: 8px;
+  }
+
+  .count-group {
+    background: rgb(127 127 127 / 8%);
+    border: 1px solid var(--pac-border);
+    border-radius: 8px;
+    padding: 8px 10px;
+  }
+
+  .count-group + .count-group { margin-top: 6px; }
+
+  .count-group-header {
+    align-items: center;
+    display: flex;
+    gap: 8px;
+    justify-content: space-between;
+  }
+
+  .count-group-name { color: var(--pac-fg); font-weight: 600; }
+
+  .count-total {
+    background: var(--pac-bg);
+    border: 1px solid var(--pac-border);
+    border-radius: 999px;
+    color: var(--pac-fg);
+    font-size: 12px;
+    font-weight: 600;
+    min-width: 24px;
+    padding: 1px 7px;
+    text-align: center;
+  }
+
+  .count-details {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px 14px;
+    margin-top: 4px;
+  }
+
+  .count-detail { font-size: 12px; }
+  .count-detail strong { color: var(--pac-fg); font-weight: 600; }
 
   .status[data-state="error"] { color: #cf222e; }
   .status[data-state="success"] { color: var(--pac-accent); }
@@ -137,11 +195,89 @@ const styles = String.raw`
 export interface ExportResult {
   reviewCount: number;
   threadCount: number;
+  availableCounts: ContextCounts;
 }
+
+export type CountsHandler = () => Promise<ContextCounts>;
 
 export type ExportHandler = (options: ExportOptions) => Promise<ExportResult>;
 
-export function mountExporter(onExport: ExportHandler): void {
+function appendCountGroup(
+  root: HTMLElement,
+  title: string,
+  total: number,
+  totalLabel: string,
+  details: Array<[string, number]>,
+): void {
+  const group = document.createElement("div");
+  group.className = "count-group";
+
+  const header = document.createElement("div");
+  header.className = "count-group-header";
+  const name = document.createElement("span");
+  name.className = "count-group-name";
+  name.textContent = title;
+  const totalElement = document.createElement("span");
+  totalElement.className = "count-total";
+  totalElement.dataset.count = totalLabel;
+  totalElement.textContent = String(total);
+  totalElement.setAttribute("aria-label", `${title}: ${total} total`);
+  header.append(name, totalElement);
+
+  const detailList = document.createElement("div");
+  detailList.className = "count-details";
+  for (const [label, count] of details) {
+    const detail = document.createElement("span");
+    detail.className = "count-detail";
+    detail.dataset.count = label;
+    detail.append(`${label}: `);
+    const value = document.createElement("strong");
+    value.textContent = String(count);
+    detail.append(value);
+    detailList.append(detail);
+  }
+
+  group.append(header, detailList);
+  root.append(group);
+}
+
+function renderAvailableCounts(root: HTMLElement, counts: ContextCounts): void {
+  root.removeAttribute("data-state");
+  root.replaceChildren();
+
+  const heading = document.createElement("div");
+  heading.className = "counts-heading";
+  heading.textContent = "Available context";
+  root.append(heading);
+
+  appendCountGroup(
+    root,
+    "Review summaries",
+    counts.reviewSummaries.total,
+    "review-summaries-total",
+    [
+      ["Change requests", counts.reviewSummaries.changesRequested],
+      ["Other human", counts.reviewSummaries.otherHuman],
+      ["Copilot", counts.reviewSummaries.copilot],
+    ],
+  );
+  appendCountGroup(
+    root,
+    "Review threads",
+    counts.reviewThreads.total,
+    "review-threads-total",
+    [
+      ["Unresolved", counts.reviewThreads.unresolved],
+      ["Resolved", counts.reviewThreads.resolved],
+      ["Outdated", counts.reviewThreads.outdated],
+    ],
+  );
+}
+
+export function mountExporter(
+  onExport: ExportHandler,
+  onCounts?: CountsHandler,
+): void {
   if (document.getElementById(HOST_ID)) return;
 
   const host = document.createElement("div");
@@ -204,6 +340,7 @@ export function mountExporter(onExport: ExportHandler): void {
             </span>
           </label>
         </fieldset>
+        <div class="counts" aria-live="polite">Counts load when the popup opens.</div>
         <div class="status" role="status" aria-live="polite"></div>
         <div class="actions">
           <button class="cancel" value="cancel" type="button">Cancel</button>
@@ -218,6 +355,7 @@ export function mountExporter(onExport: ExportHandler): void {
   const form = shadow.querySelector<HTMLFormElement>("form");
   const cancel = shadow.querySelector<HTMLButtonElement>(".cancel");
   const exportButton = shadow.querySelector<HTMLButtonElement>(".export");
+  const counts = shadow.querySelector<HTMLElement>(".counts");
   const status = shadow.querySelector<HTMLElement>(".status");
   const reviewSummaries = shadow.querySelector<HTMLInputElement>(
     "input[name='review-summaries']",
@@ -241,6 +379,7 @@ export function mountExporter(onExport: ExportHandler): void {
     !form ||
     !cancel ||
     !exportButton ||
+    !counts ||
     !status ||
     !reviewSummaries ||
     !allReviews ||
@@ -261,16 +400,38 @@ export function mountExporter(onExport: ExportHandler): void {
   reviewThreads.addEventListener("change", syncDependencies);
   syncDependencies();
 
+  let countsRequest = 0;
   trigger.addEventListener("click", () => {
+    const request = ++countsRequest;
     status.textContent = "";
     status.removeAttribute("data-state");
+    counts.textContent = onCounts
+      ? "Reading available reviews and threads…"
+      : "Counts will appear after copying.";
+    counts.removeAttribute("data-state");
     exportButton.disabled = false;
     exportButton.textContent = "Copy Markdown";
     dialog.showModal();
+
+    if (!onCounts) return;
+    void onCounts()
+      .then((availableCounts) => {
+        if (request !== countsRequest) return;
+        renderAvailableCounts(counts, availableCounts);
+      })
+      .catch((error: unknown) => {
+        if (request !== countsRequest) return;
+        counts.dataset.state = "error";
+        counts.textContent =
+          error instanceof Error
+            ? error.message
+            : "Could not load review counts. They will be shown after copying.";
+      });
   });
   cancel.addEventListener("click", () => dialog.close());
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
+    countsRequest += 1;
     exportButton.disabled = true;
     exportButton.textContent = "Collecting…";
     status.textContent = "Reading reviews and resolving file paths…";
@@ -299,8 +460,8 @@ export function mountExporter(onExport: ExportHandler): void {
         sections.length > 0
           ? `Copied PR information and ${sections.join(" and ")}.`
           : "Copied PR information.";
+      renderAvailableCounts(counts, result.availableCounts);
       exportButton.textContent = "Copied";
-      window.setTimeout(() => dialog.close(), 900);
     } catch (error) {
       status.dataset.state = "error";
       status.textContent =

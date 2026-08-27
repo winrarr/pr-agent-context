@@ -1,4 +1,5 @@
 import type {
+  ReviewSummaryCounts,
   ExportOptions,
   PullRequestReview,
   PullRequestReviewState,
@@ -73,6 +74,25 @@ export function parseReviewSummaries(
 
 function isCopilotReview(review: PullRequestReview): boolean {
   return review.author.toLowerCase().includes("copilot");
+}
+
+export function countReviewSummaries(
+  reviews: PullRequestReview[],
+): ReviewSummaryCounts {
+  return reviews.reduce<ReviewSummaryCounts>(
+    (counts, review) => {
+      counts.total += 1;
+      if (isCopilotReview(review)) {
+        counts.copilot += 1;
+      } else if (review.state === "changes_requested") {
+        counts.changesRequested += 1;
+      } else {
+        counts.otherHuman += 1;
+      }
+      return counts;
+    },
+    { total: 0, changesRequested: 0, otherHuman: 0, copilot: 0 },
+  );
 }
 
 export function filterReviewSummaries(

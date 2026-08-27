@@ -1,4 +1,8 @@
-import type { ReviewComment, ReviewThread } from "../domain";
+import type {
+  ReviewComment,
+  ReviewThread,
+  ReviewThreadCounts,
+} from "../domain";
 import { normalizeText, queryText } from "../shared/dom";
 import type { FilePathMap } from "./file-path-map";
 import { resolveThreadPath } from "./file-path-map";
@@ -150,5 +154,20 @@ export function parseReviewThreads(
 ): ReviewThread[] {
   return findReviewThreadElements(document).map((element, index) =>
     parseReviewThread(element, paths, index),
+  );
+}
+
+export function countReviewThreads(
+  threads: ReviewThread[],
+): ReviewThreadCounts {
+  return threads.reduce<ReviewThreadCounts>(
+    (counts, thread) => {
+      counts.total += 1;
+      if (thread.resolved) counts.resolved += 1;
+      else counts.unresolved += 1;
+      if (thread.outdated) counts.outdated += 1;
+      return counts;
+    },
+    { total: 0, unresolved: 0, resolved: 0, outdated: 0 },
   );
 }

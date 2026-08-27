@@ -19,7 +19,7 @@ describe("collectPullRequestContext", () => {
       return new Response(body ?? "missing", { status: body ? 200 : 404 });
     });
 
-    const context = await collectPullRequestContext(
+    const { context, availableCounts } = await collectPullRequestContext(
       reference,
       {
         includeReviewSummaries: true,
@@ -42,6 +42,20 @@ describe("collectPullRequestContext", () => {
       headSha: "abcde12345",
     });
     expect(context.threads).toHaveLength(2);
+    expect(availableCounts).toEqual({
+      reviewSummaries: {
+        total: 1,
+        changesRequested: 1,
+        otherHuman: 0,
+        copilot: 0,
+      },
+      reviewThreads: {
+        total: 2,
+        unresolved: 1,
+        resolved: 1,
+        outdated: 1,
+      },
+    });
     expect(context.reviews).toEqual([
       expect.objectContaining({
         id: "303",
@@ -71,7 +85,7 @@ describe("collectPullRequestContext", () => {
       return new Response(body ?? "unexpected", { status: body ? 200 : 500 });
     });
 
-    const context = await collectPullRequestContext(
+    const { context } = await collectPullRequestContext(
       reference,
       {
         includeReviewSummaries: true,
@@ -100,7 +114,7 @@ describe("collectPullRequestContext", () => {
       return new Response(body ?? "unexpected", { status: body ? 200 : 500 });
     });
 
-    const context = await collectPullRequestContext(
+    const { context, availableCounts } = await collectPullRequestContext(
       reference,
       {
         includeReviewSummaries: false,
@@ -121,6 +135,12 @@ describe("collectPullRequestContext", () => {
     expect(context.reviews).toBeUndefined();
     expect(context.threads).toBeUndefined();
     expect(context.diff).toBeUndefined();
+    expect(availableCounts.reviewSummaries.total).toBe(1);
+    expect(availableCounts.reviewThreads).toMatchObject({
+      total: 2,
+      unresolved: 1,
+      resolved: 1,
+    });
     expect(fetcher).toHaveBeenCalledTimes(1);
   });
 });

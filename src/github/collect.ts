@@ -1,4 +1,5 @@
 import type {
+  ContextCounts,
   ExportOptions,
   PullRequestContext,
   PullRequestReference,
@@ -7,15 +8,25 @@ import { parseHtml } from "../shared/dom";
 import { buildFilePathMap } from "./file-path-map";
 import { parsePullRequestMetadata } from "./metadata";
 import {
+  countReviewSummaries,
   filterReviewSummaries,
   parseReviewSummaries,
 } from "./review-summaries";
-import { findReviewThreadElements, parseReviewThread } from "./review-threads";
+import {
+  countReviewThreads,
+  findReviewThreadElements,
+  parseReviewThread,
+} from "./review-threads";
 
 export interface CollectionDependencies {
   fetch: typeof fetch;
   currentDocument: Document;
   currentUrl: URL;
+}
+
+export interface PullRequestCollection {
+  context: PullRequestContext;
+  availableCounts: ContextCounts;
 }
 
 async function fetchText(fetcher: typeof fetch, url: string): Promise<string> {
@@ -42,7 +53,7 @@ export async function collectPullRequestContext(
   reference: PullRequestReference,
   options: ExportOptions,
   dependencies: CollectionDependencies,
-): Promise<PullRequestContext> {
+): Promise<PullRequestCollection> {
   const [conversation, filesHtml, diff] = await Promise.all([
     loadConversation(reference, dependencies),
     options.includeReviewThreads
@@ -55,14 +66,25 @@ export async function collectPullRequestContext(
   const paths = filesHtml
     ? buildFilePathMap(parseHtml(filesHtml))
     : new Map<string, string>();
+  const allReviews = parseReviewSummaries(conversation, reference.url);
+  const allThreadElements = findReviewThreadElements(conversation);
+  const initialThreads = allThreadElements.map((element, index) => ({
+    element,
+    thread: parseReviewThread(element, paths, index),
+  }));
+  const availableCounts: ContextCounts = {
+    reviewSummaries: countReviewSummaries(allReviews),
+    reviewThreads: countReviewThreads(
+      initialThreads.map(({ thread }) => thread),
+    ),
+  };
   const threadElements = options.includeReviewThreads
-    ? findReviewThreadElements(conversation).filter(
-        (element) =>
-          options.includeResolved || element.dataset.resolved !== "true",
+    ? initialThreads.filter(
+        ({ thread }) => options.includeResolved || !thread.resolved,
       )
     : [];
   const threads = await Promise.all(
-    threadElements.map(async (element, index) => {
+    threadElements.map(async ({ element }, index) => {
       const initialThread = parseReviewThread(element, paths, index);
       if (initialThread.comments.length > 0) return initialThread;
 
@@ -77,17 +99,15 @@ export async function collectPullRequestContext(
   );
 
   return {
-    pullRequest: parsePullRequestMetadata(conversation, reference),
-    ...(options.includeReviewSummaries
-      ? {
-          reviews: filterReviewSummaries(
-            parseReviewSummaries(conversation, reference.url),
-            options,
-          ),
-        }
-      : {}),
-    ...(options.includeReviewThreads ? { threads } : {}),
-    ...(diff ? { diff } : {}),
-    exportedAt: new Date().toISOString(),
+    context: {
+      pullRequest: parsePullRequestMetadata(conversation, reference),
+      ...(options.includeReviewSummaries
+        ? { reviews: filterReviewSummaries(allReviews, options) }
+        : {}),
+      ...(options.includeReviewThreads ? { threads } : {}),
+      ...(diff ? { diff } : {}),
+      exportedAt: new Date().toISOString(),
+    },
+    availableCounts,
   };
 }

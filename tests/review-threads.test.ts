@@ -1,5 +1,6 @@
 import { buildFilePathMap } from "../src/github/file-path-map";
 import {
+  countReviewThreads,
   findReviewThreadElements,
   parseReviewThread,
   parseReviewThreads,
@@ -43,5 +44,16 @@ describe("review thread parsing", () => {
         { id: "202", author: "Copilot", body: "The deferred comment body." },
       ],
     });
+  });
+
+  it("counts resolved, unresolved, and outdated threads", () => {
+    expect(countReviewThreads(parseReviewThreads(conversation, paths))).toEqual(
+      {
+        total: 2,
+        unresolved: 1,
+        resolved: 1,
+        outdated: 1,
+      },
+    );
   });
 });

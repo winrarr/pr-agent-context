@@ -33,6 +33,8 @@ Then:
 
 After changing source code, run `npm run build` and reload the extension. For continuous rebuilding, use `npm run dev`.
 
+When the popup opens, it loads a readable breakdown of the available review summaries and threads, including human change requests, other human reviews, Copilot reviews, and resolved or unresolved threads. The breakdown remains visible after a successful copy.
+
 ## Verify changes
 
 ```bash

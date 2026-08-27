@@ -43,6 +43,25 @@ export interface PullRequestReview {
   url?: string;
 }
 
+export interface ReviewSummaryCounts {
+  total: number;
+  changesRequested: number;
+  otherHuman: number;
+  copilot: number;
+}
+
+export interface ReviewThreadCounts {
+  total: number;
+  unresolved: number;
+  resolved: number;
+  outdated: number;
+}
+
+export interface ContextCounts {
+  reviewSummaries: ReviewSummaryCounts;
+  reviewThreads: ReviewThreadCounts;
+}
+
 export interface PullRequestContext {
   pullRequest: PullRequestMetadata;
   reviews?: PullRequestReview[];

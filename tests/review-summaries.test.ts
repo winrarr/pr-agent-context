@@ -1,5 +1,6 @@
 import type { PullRequestReview } from "../src/domain";
 import {
+  countReviewSummaries,
   filterReviewSummaries,
   parseReviewSummaries,
 } from "../src/github/review-summaries";
@@ -82,5 +83,35 @@ describe("review summary parsing", () => {
         includeCopilotReviews: true,
       }).map((review) => review.id),
     ).toEqual(["2"]);
+  });
+
+  it("counts review summary categories", () => {
+    const reviews: PullRequestReview[] = [
+      {
+        id: "1",
+        author: "reviewer",
+        body: "Please fix this.",
+        state: "changes_requested",
+      },
+      {
+        id: "2",
+        author: "maintainer",
+        body: "Looks good.",
+        state: "approved",
+      },
+      {
+        id: "3",
+        author: "copilot-pull-request-reviewer[bot]",
+        body: "A generated review.",
+        state: "commented",
+      },
+    ];
+
+    expect(countReviewSummaries(reviews)).toEqual({
+      total: 3,
+      changesRequested: 1,
+      otherHuman: 1,
+      copilot: 1,
+    });
   });
 });
