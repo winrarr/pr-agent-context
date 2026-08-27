@@ -1,13 +1,19 @@
 {
   "manifest_version": 3,
   "name": "PR Agent Context",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Copy complete GitHub pull request review context without a separate API token.",
-  "permissions": ["clipboardWrite"],
+  "permissions": [
+    "clipboardWrite"
+  ],
   "content_scripts": [
     {
-      "matches": ["https://github.com/*/*/pull/*"],
-      "js": ["content.js"],
+      "matches": [
+        "https://github.com/*/*/pull/*"
+      ],
+      "js": [
+        "content.js"
+      ],
       "run_at": "document_idle"
     }
   ]
